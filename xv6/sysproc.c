@@ -79,8 +79,6 @@ sys_sleep(void)
   return 0;
 }
 
-
-
 int
 sys_fcount(void)
 {
@@ -88,6 +86,10 @@ sys_fcount(void)
   if(argint(0, &fc) < 0)
     return -1;
   return fcount(fc);
+}
+
+int sys_tickcount() {
+  return ticks;
 }
 
 
