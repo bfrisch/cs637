@@ -3,8 +3,6 @@
 #include "user.h"
 #include "fs.h"
 
-
-
 char*
 fmtname(char *path)
 {
@@ -32,11 +30,6 @@ ls(char *path)
   struct dirent de;
   struct stat st;
 
-
-  int nb = fcount();
-  printf(1, "fcount() returned %d\n", nb);
-
-
   if((fd = open(path, 0)) < 0){
     printf(2, "ls: cannot open %s\n", path);
     return;
@@ -47,10 +40,6 @@ ls(char *path)
     close(fd);
     return;
   }
-
-
-  nb = fcount();
-  printf(1, "fcount() returned %d\n", nb);
  
   switch(st.type){
   case T_FILE:
@@ -78,13 +67,7 @@ ls(char *path)
     }
     break;
   }
-  nb = fcount();
-  printf(1, "fcount() returned %d\n", nb);
-
   close(fd);
-  nb = fcount();
-  printf(1, "fcount() returned %d\n", nb);
-
 }
 
 int
