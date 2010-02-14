@@ -79,7 +79,7 @@ sys_sleep(void)
   return 0;
 }
 
-int
+unsigned int
 sys_fcount(void)
 {
   int fc;
@@ -88,8 +88,6 @@ sys_fcount(void)
   return fcount(fc);
 }
 
-int sys_tickcount() {
+int sys_tickcount_sc() {
   return ticks;
 }
-
-
