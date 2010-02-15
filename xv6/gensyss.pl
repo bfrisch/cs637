@@ -108,9 +108,11 @@ while (<IF>) {
     }
 }
 
-# Actually generate sysjump.c from the variables.
-print(SH "#endif /* __SYSCALL_H_ */$/");
+# Actually generate the core of sysjump.h from the variables.
 print(SJH "$externs$/int (*syscalls[])(void) = {$/$syscallArray};$/$/#endif /* __SYSJUMP_H_ */$/");
+
+# Close the ifndef.
+print(SH "#endif /* __SYSCALL_H_ */$/");
 print(UH "$/#endif /* $headerMacro */$/");
 
 close(SJH);
