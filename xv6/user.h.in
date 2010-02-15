@@ -1,0 +1,54 @@
+struct stat;
+# The line above IS ADDED as is to the output header as is after an error message is printed.
+int skippedFunctionType(void); extern int externInt;
+// Since the line above looks like a function prototype, but does not end as a function prototype on one line is expected to end, an error message is printed and it is NOT ADDED to the output header.
+
+// system calls
+     int fork(void);  
+# Every line is trimmed.   
+int exit(void) __attribute__((noreturn));
+int wait(void);     # Comment that isn't at end of line.
+int pipe(int*);   // C-style type of comment that isn't at end of line
+int write(int, void*, int);
+int read(int, void*, int);
+int close(int);
+int kill(int);
+int exec(char*, char**);
+int open(char*, int);
+int mknod(char*, short, short);
+int unlink(char*);
+int fstat(int fd, struct stat*);
+int link(char*, char*);
+int mkdir(char*);
+int chdir(char*);
+int dup(int)
+# I don't need a semi-colon since gensyss.pl requires each system call prototype to be on its own line for now.
+int getpid();
+char* sbrk(int);
+int sleep(int);
+unsigned int fcount(void);
+// gensys.pl supports multiword variable names too.
+
+# Since tickcount is implemented in the function called sys_tickcount_sc instead of sys_tickount I specify it after the prototype with a : and the name of the function that implements the system call.
+int tickcount(void) : sys_tickcount_sc
+
+// ulib.c
+// All of these have : with nothing afterwards as they are not system calls.
+# The :'s tell gensyss.pl to just include the function definition in user.h instead of considering it a system call and hooking it up to the system call path.
+int stat(char*, struct stat*); :
+char* strcpy(char*, char*); :
+void *memmove(void*, void*, int); :
+char* strchr(const char*, char c); :
+int strcmp(const char*, const char*); :
+void printf(int, char*, ...); :
+char* gets(char*, int max); : 
+uint strlen(char*); :        
+void* memset(void*, int, uint); :      
+void* malloc(uint); :      
+void free(void*); :      
+int atoi(const char*); :       
+
+? threads.h
+# The above line tells gensyss.pl that the following methods until the end of the file or the  next line that begins with a ? (whichever comes first) need to be in threads.h instead of user.h or whatever the second argument to gensyss.pl was.
+int thread_create(void *(*start_routine)(void*), void *arg); 
+void thread_wait(void);

@@ -67,7 +67,7 @@ initcode: initcode.S
 	$(OBJCOPY) -S -O binary initcode.out initcode
 	$(OBJDUMP) -S initcode.o > initcode.asm
 
-kernel: $(OBJS) bootother initcode
+kernel: gensyss $(OBJS) bootother initcode
 	$(LD) $(LDFLAGS) -Ttext 0x100000 -e main -o kernel $(OBJS) -b binary initcode bootother
 	$(OBJDUMP) -S kernel > kernel.asm
 	$(OBJDUMP) -t kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > kernel.sym
@@ -118,7 +118,7 @@ fs.img: mkfs README $(UPROGS)
 
 clean: 
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
-	*.o *.d *.asm *.sym vectors.S parport.out \
+	*.o *.d *.asm *.sym vectors.S parport.out usys.S user.h sysjump.h\
 	bootblock kernel xv6.img fs.img mkfs \
 	$(UPROGS)
 
@@ -140,3 +140,5 @@ bochs : fs.img xv6.img
 qemu: fs.img xv6.img
 	qemu -parallel stdio -hdb fs.img xv6.img
 
+gensyss: user.h.in
+	perl gensyss.pl

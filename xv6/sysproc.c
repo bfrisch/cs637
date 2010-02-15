@@ -91,3 +91,10 @@ sys_fcount(void)
 int sys_tickcount_sc() {
   return ticks;
 }
+
+int sys_thread_create() {
+  return -1;
+}
+
+void sys_thread_wait() {
+}
