@@ -14,6 +14,9 @@ static struct proc *initproc;
 int nextpid = 1;
 extern void forkret(void);
 extern void forkret1(struct trapframe*);
+extern unsigned int fastrand(unsigned int s);
+int ttltcts = 0; 
+
 
 void
 pinit(void)
@@ -36,6 +39,8 @@ allocproc(void)
     if(p->state == UNUSED){
       p->state = EMBRYO;
       p->pid = nextpid++;
+      p->tctcnt = 100;
+      ttltcts += 100;
       release(&proc_table_lock);
       return p;
     }
@@ -146,6 +151,54 @@ copyproc(struct proc *p)
   return np;
 }
 
+// Create a new thread copying p as the parent.
+// Sets up stack to return as if from system call. <- done in other fcn
+// Caller must set state of returned proc to RUNNABLE.
+struct proc*
+copyproc_thread(struct proc *p, void* usrstck)
+{
+  int i;
+  struct proc *np;
+
+  // Allocate process.
+  if((np = allocproc()) == 0)
+    return 0;
+
+  // Allocate kernel stack.
+  if((np->kstack = kalloc(KSTACKSIZE)) == 0){
+    np->state = UNUSED;
+    return 0;
+  }
+  np->tf = (struct trapframe*)(np->kstack + KSTACKSIZE) - 1;
+
+  if(p){  // Copy process state from p.
+    np->parent = p;
+    memmove(np->tf, p->tf, sizeof(*np->tf));
+  
+    np->sz = p->sz;
+    np->mem = p->mem;
+
+    for(i = 0; i < NOFILE; i++) 
+      if(p->ofile[i])
+        np->ofile[i] = p->ofile[i];
+    np->cwd = p->cwd;
+  }
+
+  // Set up new context to start executing at forkret (see below).
+  memset(&np->context, 0, sizeof(np->context));
+  np->context.eip = (uint)forkret;
+  np->context.esp = (uint)np->tf;
+
+  // set new thread to point to new stack.
+  np->tf->ebp = usrstck + 1008;
+  np->tf->esp = usrstck + 1008;
+  
+
+  // Clear %eax so that fork system call returns 0 in child.
+  np->tf->eax = 0;
+  return np;
+}
+
 // Set up first user process.
 void
 userinit(void)
@@ -203,6 +256,10 @@ scheduler(void)
   struct proc *p;
   struct cpu *c;
   int i;
+  unsigned int random;
+  unsigned int curtct;
+  unsigned int nxttct;
+
 
   c = &cpus[cpu()];
   for(;;){
@@ -211,8 +268,23 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&proc_table_lock);
+
+    // random = 0 to ttltcts
+    random = fastrand(ticks) % ttltcts;
+    curtct = 0;
+    // nxttct = 0;
+
+
     for(i = 0; i < NPROC; i++){
       p = &proc[i];
+      nxttct = curtct + p->tctcnt;
+      if (!(random >= curtct && random < nxttct)) {
+          curtct = nxttct;
+          continue;
+      }
+
+      i = NPROC; // start looping processes from begining
+
       if(p->state != RUNNABLE)
         continue;
 
@@ -363,19 +435,28 @@ exit(void)
   struct proc *p;
   int fd;
 
+  int isThread = (cp->parent->mem == cp->mem);
+
+  ttltcts -= cp->tctcnt;
+
   if(cp == initproc)
     panic("init exiting");
 
-  // Close all open files.
-  for(fd = 0; fd < NOFILE; fd++){
-    if(cp->ofile[fd]){
-      fileclose(cp->ofile[fd]);
-      cp->ofile[fd] = 0;
-    }
-  }
 
-  iput(cp->cwd);
-  cp->cwd = 0;
+  if (!isThread) {
+      // Close all open files.
+      for(fd = 0; fd < NOFILE; fd++){
+          if(cp->ofile[fd]){
+              fileclose(cp->ofile[fd]);
+              cp->ofile[fd] = 0;
+          }
+      }
+
+
+    iput(cp->cwd);
+    cp->cwd = 0;
+
+  }
 
   acquire(&proc_table_lock);
 
@@ -417,7 +498,9 @@ wait(void)
       if(p->parent == cp){
         if(p->state == ZOMBIE){
           // Found one.
-          kfree(p->mem, p->sz);
+            if (cp->mem != p->mem) {
+                kfree(p->mem, p->sz);
+            }
           kfree(p->kstack, KSTACKSIZE);
           pid = p->pid;
           p->state = UNUSED;
@@ -479,7 +562,7 @@ procdump(void)
   }
 }
 
-int
+unsigned int
 fcount()
 {
   int fd;
@@ -488,10 +571,9 @@ fcount()
   // Loop through all open files.
   for(fd = 0; fd < NOFILE; fd++){
     if(cp->ofile[fd]){
-      fc = fc + 1;  // Increment our file counter.
+      fc++;  // Increment our file counter.
     }
   }
 
   return fc;
 }
-

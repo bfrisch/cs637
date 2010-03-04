@@ -92,7 +92,10 @@ int             pipewrite(struct pipe*, char*, int);
 
 // proc.c
 struct proc*    copyproc(struct proc*);
+struct proc*    copyproc_thread(struct proc *p, void* stack);
+
 struct proc*    curproc(void);
+unsigned int    fcount(void);
 void            exit(void);
 int             growproc(int);
 int             kill(int);

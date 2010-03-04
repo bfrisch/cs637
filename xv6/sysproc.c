@@ -17,6 +17,23 @@ sys_fork(void)
   return pid;
 }
 
+
+int
+sys_thread_fork(void)
+{
+  int pid;
+  struct proc *np;
+  void* stack;
+  if (argptr(0, (char**)(&stack), 1024) < 0) {
+    return -1;
+  } 
+  if((np = copyproc_thread(cp, stack)) == 0)
+    return -1;
+  pid = np->pid;
+  np->state = RUNNABLE;
+  return pid;
+}
+
 int
 sys_exit(void)
 {
@@ -85,16 +102,12 @@ sys_fcount(void)
   int fc;
   if(argint(0, &fc) < 0)
     return -1;
-  return fcount(fc);
+  return fcount();
 }
 
 int sys_tickcount_sc() {
   return ticks;
 }
-
-int sys_thread_create() {
-  return -1;
-}
-
-void sys_thread_wait() {
+ 
+void sys_thread_wait_internal() {
 }

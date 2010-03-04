@@ -27,6 +27,7 @@ int getpid();
 char* sbrk(int);
 int sleep(int);
 unsigned int fcount(void);
+int proc_tickets(int);
 // gensys.pl supports multiword variable names too.
 
 # Since tickcount is implemented in the function called sys_tickcount_sc instead of sys_tickount I specify it after the prototype with a : and the name of the function that implements the system call.
@@ -48,7 +49,11 @@ void* malloc(uint); :
 void free(void*); :      
 int atoi(const char*); :       
 
-? threads.h
+? thread.h
 # The above line tells gensyss.pl that the following methods until the end of the file or the  next line that begins with a ? (whichever comes first) need to be in threads.h instead of user.h or whatever the second argument to gensyss.pl was.
-int thread_create(void *(*start_routine)(void*), void *arg); 
-void thread_wait(void);
+int thread_create(void *(*start_routine)(void*), void *arg); :
+void thread_wait(void); :
+
+? threadsInt.h
+int thread_fork(void*);
+int thread_wait_internal();
