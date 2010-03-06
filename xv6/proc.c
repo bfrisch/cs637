@@ -191,9 +191,8 @@ copyproc_thread(struct proc *p, void* usrstck)
 
   // set new thread to point to new stack.
   np->tf->ebp = usrstck + 1008;
-  np->tf->esp = usrstck + 1008;
+  np->tf->esp = usrstck + 1016;
   
-
   // Clear %eax so that fork system call returns 0 in child.
   np->tf->eax = 0;
   return np;
@@ -263,7 +262,7 @@ scheduler(void)
 
   c = &cpus[cpu()];
   for(;;){
-    // Enable interrupts on this processor.
+    // Enable interrupts mon this processor.
     sti();
 
     // Loop over process table looking for process to run.
@@ -273,7 +272,6 @@ scheduler(void)
     random = fastrand(ticks) % ttltcts;
     curtct = 0;
     // nxttct = 0;
-
 
     for(i = 0; i < NPROC; i++){
       p = &proc[i];

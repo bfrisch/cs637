@@ -3,6 +3,9 @@
 #include "param.h"
 #include "mmu.h"
 #include "proc.h"
+#include "spinlock.h"
+
+struct spinlock ticketslock;
 
 int
 sys_fork(void)
@@ -24,7 +27,7 @@ sys_thread_fork(void)
   int pid;
   struct proc *np;
   void* stack;
-  if (argptr(0, (char**)(&stack), 1024) < 0) {
+  if (argint(0, (int*)(&stack)) < 0) {
     return -1;
   } 
   if((np = copyproc_thread(cp, stack)) == 0)
@@ -32,6 +35,23 @@ sys_thread_fork(void)
   pid = np->pid;
   np->state = RUNNABLE;
   return pid;
+}
+
+int sys_proc_tickets(void) {
+  int newTickcount;
+  if (argint(0, &newTickcount) < 0) {
+    return -1;
+  }
+  if (newTickcount > 0) {
+    acquire(&ticketslock);
+    ttltcts -= cp->tctcnt;
+    cp->tctcnt = newTickcount;
+    ttltcts += cp->tctcnt;
+    release(&ticketslock);
+  } else if (newTickcount < 0) {
+    return -1;
+  }
+  return cp->tctcnt;
 }
 
 int
