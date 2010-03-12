@@ -7,6 +7,10 @@
 
 struct spinlock ticketslock;
 
+void ticketlockinit(void) {
+  initlock(&ticketslock, "tickets");
+}
+
 int
 sys_fork(void)
 {
@@ -26,11 +30,11 @@ sys_thread_fork(void)
 {
   int pid;
   struct proc *np;
-  void* stack;
-  if (argint(0, (int*)(&stack)) < 0) {
+  int stack;
+  if (argint(0, &stack) < 0) {
     return -1;
   } 
-  if((np = copyproc_thread(cp, stack)) == 0)
+  if((np = copyproc_thread(cp, stack)) <= 0)
     return -1;
   pid = np->pid;
   np->state = RUNNABLE;
@@ -128,6 +132,22 @@ sys_fcount(void)
 int sys_tickcount_sc() {
   return ticks;
 }
- 
-void sys_thread_wait_internal() {
+
+int sys_thread_wait() {
+  return wait();
+}
+
+int sys_cond_sleep_and_unlock_mutex(void) {
+  int cond_addr, mutex_addr;
+  if (argint(0, &cond_addr) < 0 || argint(1, &mutex_addr) < 0) {
+    return -1;
+  }
+}
+
+int sys_cond_signal(void) {
+  int cond_addr;
+  if (argint(0, &cond_addr) < 0) {
+    return -1;
+  }
+  return wake_on_cond(cond_addr);
 }

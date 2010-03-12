@@ -3,12 +3,13 @@
 #include "printf.h"
 #include "thread.h"
 
-#define ITERATIONS 1000
+#define ITERATIONS 100000
 #define NUM_PROCS 3
-#define NUM_THREADS 3
+#define NUM_THREADS 9
 
-void* increment(void*); 
 volatile int x = 0;
+mutex_t lock;
+mutex_t print_lock;
 
 void processTest() {
   int i;
@@ -16,18 +17,17 @@ void processTest() {
         int currentrunT = 0;
         int myprocid = fork();
         if (myprocid == 0) {
-            // spinloop
-            
-            // Set proportional ticket count 
-            proc_tickets(i*100);
+          // spinloop
 
-            for(currentrunT = 0; currentrunT < 100000; currentrunT++) {
-              if (tickcount() % 50 == 0) { 
-		printf(1,"Time: %d, TicketNum %d, RunCnt: %d, PID:%d\n", tickcount(), proc_tickets(0), currentrunT, getpid());
-	      }
-            }
-            exit();
+          // Set proportional ticket count             
+	  proc_tickets(i*100);
 
+	  for(currentrunT = 0; currentrunT < 100000; currentrunT++) {
+	    if (get_cpu_ticks() % 50 == 0) { 
+	      printf(1,"Time: %d, TicketNum %d, RunCnt: %d, PID:%d\n", get_cpu_ticks(), proc_tickets(0), currentrunT, getpid());
+	    }
+          }
+          exit();
         } else if (myprocid < 0) {
 	  printf(1, "Error launcing process %d!\n", i);
 	  exit();
@@ -41,22 +41,60 @@ void processTest() {
   }
 }
 
-void threadTest() {
+void threadTest(void *(*start_routine)(void*)) {
   int i;
   for (i = 0; i < NUM_THREADS; i++) { 
-    int mythreadid = thread_create(&increment, (void*) &x);
-        
-    printf(1, "Starting Thread: %d\n", mythreadid);
+    int mythreadid = thread_create(start_routine, 0);
+    mutex_lock(&print_lock);    
+    printf(1, "Create: %d!\n", mythreadid);
+    mutex_unlock(&print_lock);
   }
   
   while (i > 0) {
-    thread_wait();
-    printf(1, "Finished thread %d!\n", NUM_THREADS - i + 1);
+    int threadId = thread_wait();
+    mutex_lock(&print_lock);
+    printf(1, "Finished thread %d at %d!\n", threadId, x);
+    mutex_unlock(&print_lock);
     i--;
   }
     
   printf(1, "Expected x: %d  Total for x: %d\n", NUM_THREADS * ITERATIONS, x);
 }
+
+void*
+race_increment(void* arg) 
+{
+  int* myX = (int*) arg;
+  int i;
+  printf(1, "Begin: %d!\n", getpid());
+  for(i = 0; i < ITERATIONS; i++) {
+    //printf(1, "%d t%d!\n", x, getpid());
+    int xTemp = x;
+    xTemp++;
+    x=xTemp;
+  }
+  exit();
+}
+
+void*
+lock_increment(void* arg) 
+{
+  int* myX = (int*) arg;
+  int i;
+  mutex_lock(&print_lock);
+  printf(1, "Lock Begin: %d!\n", getpid());
+  mutex_unlock(&print_lock);
+  for(i = 0; i < ITERATIONS; i++) {
+    mutex_lock(&lock);
+    //printf(1, "%d t%d!\n", x, getpid());
+    int xTemp = x;
+    xTemp++;
+    x=xTemp;
+    mutex_unlock(&lock);
+  }
+  exit();
+}
+
 
 int main(int argc, char* argv[]) 
 {
@@ -70,21 +108,14 @@ int main(int argc, char* argv[])
     processTest();
     break;
   case 2:
-    threadTest();
+    threadTest(&race_increment);
+    break;
+  case 3:
+    printf(1, "Starting test 3!");
+    threadTest(&lock_increment);
     break;
   default:
     printf(1, "Invalid Argument.\nUsage: mytests <test_num>\n");
   }
   exit();
-}
-
-void*
-increment(void* arg) 
-{
-  int* myX = (int*) arg;
-  int i;
-  for(i = 0; i < ITERATIONS; i++) {
-    (*(myX))++;
-  }
-  return 0;
 }

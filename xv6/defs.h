@@ -92,7 +92,7 @@ int             pipewrite(struct pipe*, char*, int);
 
 // proc.c
 struct proc*    copyproc(struct proc*);
-struct proc*    copyproc_thread(struct proc *p, void* stack);
+struct proc*    copyproc_thread(struct proc*, int);
 
 struct proc*    curproc(void);
 unsigned int    fcount(void);
@@ -101,14 +101,16 @@ int             growproc(int);
 int             kill(int);
 void            pinit(void);
 void            procdump(void);
-void            scheduler(void) __attribute__((noreturn));
+void            rr_scheduler(void) __attribute__((noreturn));
+void            lottery_scheduler(void) __attribute__((noreturn));
 void            setupsegs(struct proc*);
 void            sleep(void*, struct spinlock*);
 void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
-
+int             wake_on_cond(int);
+int             sleep_on_cond(int, int);
 // swtch.S
 void            swtch(struct context*, struct context*);
 
@@ -141,11 +143,15 @@ void            syscall(void);
 // timer.c
 void            timer_init(void);
 
+// sysproc.c
+void            ticketlockinit(void);
+
 // trap.c
 void            idtinit(void);
 extern int      ticks;
 void            tvinit(void);
 extern struct spinlock tickslock;
+extern struct spinlock ticketslock;
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

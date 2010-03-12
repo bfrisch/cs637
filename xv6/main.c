@@ -27,6 +27,7 @@ main(void)
   ioapic_init();   // another interrupt controller
   kinit();         // physical memory allocator
   tvinit();        // trap vectors
+  ticketlockinit();// init the ticket lock
   fileinit();      // file table
   iinit();         // inode cache
   console_init();  // I/O devices & their interrupts
@@ -53,7 +54,7 @@ mpmain(void)
   xchg(&cpus[cpu()].booted, 1);
 
   cprintf("cpu%d: scheduling\n", cpu());
-  scheduler();
+  rr_scheduler();
 }
 
 static void

@@ -18,6 +18,13 @@
 
 static ushort *crt = (ushort*)0xb8000;  // CGA memory
 
+#define HISTMAX 10
+uint rhist[HISTMAX];
+uint ehist[HISTMAX];
+uint hist = 0;
+int histIndex = 0;
+int startHistIndex = 0;
+
 static struct spinlock console_lock;
 int panicked = 0;
 int use_console_lock = 0;
@@ -217,13 +224,74 @@ console_intr(int (*getc)(void))
         cons_putc(BACKSPACE);
       }
       break;
+    case 226:     // up arrow
+      startHistIndex = histIndex;
+      histIndex--;
+      if(histIndex < 0)
+	histIndex = HISTMAX - 1;
+
+      if(rhist[histIndex] >= 0 && hist){
+  	// delete current contents of console
+	while(input.e != input.w && input.buf[(input.e-1) % INPUT_BUF] != '\n'){
+	  input.e--;
+	  cons_putc(BACKSPACE);
+	}
+
+	if(hist % HISTMAX  == histIndex)
+	  cprintf("end of buffer, looping\n");
+
+	// display the command stored at histIndex
+	int y=0;
+	while(rhist[histIndex] + y < ehist[histIndex] - 1){
+	  int mc = input.buf[(rhist[histIndex] + y) % INPUT_BUF];
+	  input.buf[input.e++ % INPUT_BUF] = mc;
+	  cons_putc(mc);
+	  y++;
+	}
+      }
+      else
+	histIndex = startHistIndex;
+      break;
+
+    case 227:     // down arrow
+      startHistIndex = histIndex;
+      histIndex++;
+      if(histIndex >= HISTMAX)
+	histIndex = 0;
+
+  	// delete current contents of console
+	while(input.e != input.w && input.buf[(input.e-1) % INPUT_BUF] != '\n'){
+	  input.e--;
+	  cons_putc(BACKSPACE);
+	}
+
+	if(hist % HISTMAX != histIndex){
+	  // we haven't looped through the entire buffer yet, display the stored command 
+	  int y=0;
+	  while(rhist[histIndex] + y < ehist[histIndex] - 1){
+	    int mc = input.buf[(rhist[histIndex] + y) % INPUT_BUF];
+	    input.buf[input.e++ % INPUT_BUF] = mc;
+	    cons_putc(mc);
+	    y++;
+	  }
+	}
+	else {  
+	  // we're at a blank terminal, reset histIndex to former position
+	  histIndex = startHistIndex;
+	}
+      break;
+
     default:
       if(c != 0 && input.e-input.r < INPUT_BUF){
         input.buf[input.e++ % INPUT_BUF] = c;
         cons_putc(c);
         if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
           input.w = input.e;
-          wakeup(&input.r);
+	  rhist[hist % HISTMAX] = input.r;
+	  ehist[hist % HISTMAX] = input.e;
+	  hist++;
+	  histIndex = hist % HISTMAX;
+	  wakeup(&input.r);
         }
       }
       break;
@@ -282,6 +350,11 @@ console_init(void)
 
   pic_enable(IRQ_KBD);
   ioapic_enable(IRQ_KBD, 0);
+
+
+  int t;
+  for(t=0; t<HISTMAX; t++)
+    rhist[t] = -1;
 }
 
 void
@@ -302,4 +375,3 @@ panic(char *s)
   for(;;)
     ;
 }
-

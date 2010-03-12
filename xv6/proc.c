@@ -152,10 +152,10 @@ copyproc(struct proc *p)
 }
 
 // Create a new thread copying p as the parent.
-// Sets up stack to return as if from system call. <- done in other fcn
+// Sets up stack to return as if from system call.
 // Caller must set state of returned proc to RUNNABLE.
 struct proc*
-copyproc_thread(struct proc *p, void* usrstck)
+copyproc_thread(struct proc *p, int usrstck)
 {
   int i;
   struct proc *np;
@@ -190,8 +190,9 @@ copyproc_thread(struct proc *p, void* usrstck)
   np->context.esp = (uint)np->tf;
 
   // set new thread to point to new stack.
-  np->tf->ebp = usrstck + 1008;
-  np->tf->esp = usrstck + 1016;
+  np->tf->ebp = (uint)(usrstck) + 1008;
+  np->tf->esp = (uint)(usrstck) + 996;
+  memmove(np->mem + (uint)(np->tf->esp), (p->mem + p->tf->esp), 32);
   
   // Clear %eax so that fork system call returns 0 in child.
   np->tf->eax = 0;
@@ -242,6 +243,7 @@ curproc(void)
   return p;
 }
 
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -250,7 +252,7 @@ curproc(void)
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
 void
-scheduler(void)
+lottery_scheduler(void)
 {
   struct proc *p;
   struct cpu *c;
@@ -259,30 +261,81 @@ scheduler(void)
   unsigned int curtct;
   unsigned int nxttct;
 
-
   c = &cpus[cpu()];
   for(;;){
-    // Enable interrupts mon this processor.
+    // Enable interrupts on this processor.
     sti();
 
     // Loop over process table looking for process to run.
     acquire(&proc_table_lock);
 
-    // random = 0 to ttltcts
+    // random = 0 to ttltcts simulating whose turn it is.
     random = fastrand(ticks) % ttltcts;
     curtct = 0;
     // nxttct = 0;
 
+    // iterate over all processes
     for(i = 0; i < NPROC; i++){
       p = &proc[i];
+      if(p->state == UNUSED || p->state == ZOMBIE) { 
+          continue;
+      }
+      // set up proc range.
       nxttct = curtct + p->tctcnt;
+      // not in our proc's range, check next range 
       if (!(random >= curtct && random < nxttct)) {
           curtct = nxttct;
           continue;
       }
 
-      i = NPROC; // start looping processes from begining
+      // desired proc found, don't loop through anymore.
+      i = NPROC; // start looping all processes from begining, but finish this loop.
 
+      if(p->state != RUNNABLE)
+        continue;
+
+      // Switch to chosen process.  It is the process's job
+      // to release proc_table_lock and then reacquire it
+      // before jumping back to us.
+      c->curproc = p;
+      setupsegs(p);
+      p->state = RUNNING;
+      swtch(&c->context, &p->context);
+
+      // Process is done running for now.
+      // It should have changed its p->state before coming back.
+      c->curproc = 0;
+      setupsegs(0);
+    }
+    release(&proc_table_lock);
+
+  }
+}
+
+
+// Per-CPU process scheduler.
+// Each CPU calls scheduler() after setting itself up.
+// Scheduler never returns.  It loops, doing:
+//  - choose a process to run
+//  - swtch to start running that process
+//  - eventually that process transfers control
+//      via swtch back to the scheduler.
+void
+rr_scheduler(void)
+{
+  struct proc *p;
+  struct cpu *c;
+  int i;
+
+  c = &cpus[cpu()];
+  for(;;){
+    // Enable interrupts on this processor.
+    sti();
+
+    // Loop over process table looking for process to run.
+    acquire(&proc_table_lock);
+    for(i = 0; i < NPROC; i++){
+      p = &proc[i];
       if(p->state != RUNNABLE)
         continue;
 
@@ -442,18 +495,16 @@ exit(void)
 
 
   if (!isThread) {
-      // Close all open files.
-      for(fd = 0; fd < NOFILE; fd++){
-          if(cp->ofile[fd]){
-              fileclose(cp->ofile[fd]);
-              cp->ofile[fd] = 0;
-          }
+    // Close all open files.
+    for(fd = 0; fd < NOFILE; fd++){
+      if(cp->ofile[fd]){
+	fileclose(cp->ofile[fd]);
+	cp->ofile[fd] = 0;
       }
-
+    }
 
     iput(cp->cwd);
     cp->cwd = 0;
-
   }
 
   acquire(&proc_table_lock);
@@ -496,9 +547,10 @@ wait(void)
       if(p->parent == cp){
         if(p->state == ZOMBIE){
           // Found one.
-            if (cp->mem != p->mem) {
-                kfree(p->mem, p->sz);
-            }
+          if (cp->mem != p->mem) {
+	    // Clear the memory only if it isn't your child thread.
+	    kfree(p->mem, p->sz);
+          }
           kfree(p->kstack, KSTACKSIZE);
           pid = p->pid;
           p->state = UNUSED;
@@ -574,4 +626,33 @@ fcount()
   }
 
   return fc;
+}
+
+int wake_on_cond(int cond_addr) {
+  struct proc *p;
+  acquire(&proc_table_lock);
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    if(p->state == SLEEPING && p->mem == cp->mem && p->cond_addr == cond_addr) {
+      p->state = RUNNABLE;
+    }
+  }
+  release(&proc_table_lock);
+  return 0;
+}
+
+int sleep_on_cond(int cond_addr, int mutex_lock)
+{
+  // Sleep
+  acquire(&proc_table_lock);
+  cp->cond_addr = cond_addr;
+  cp->state = SLEEPING;
+
+  // Unlock
+  *((int *) (cp->mem + mutex_lock)) = 0;
+  
+  // Run another process
+  sched();
+  release(&proc_table_lock);
+  return 0;
 }

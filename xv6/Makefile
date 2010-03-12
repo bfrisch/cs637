@@ -143,5 +143,7 @@ bochs : fs.img xv6.img
 qemu: fs.img xv6.img
 	qemu -parallel stdio -hdb fs.img xv6.img
 
-gensyss: user.h.in
+user.h: user.h.in
 	perl gensyss.pl
+gensyss: user.h
+

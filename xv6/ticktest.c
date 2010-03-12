@@ -5,8 +5,8 @@
 int
 main(int argc, char *argv[])
 {
-  printf(1, "Current tick count is now: %d!\n", tickcount());
+  printf(1, "Current tick count is now: %d!\n", get_cpu_ticks());
   sleep(100);
-  printf(1, "Current tick count is now: %d!\n", tickcount());
+  printf(1, "Current tick count is now: %d!\n", get_cpu_ticks());
   exit();
 }

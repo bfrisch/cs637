@@ -30,8 +30,8 @@ unsigned int fcount(void);
 int proc_tickets(int);
 // gensys.pl supports multiword variable names too.
 
-# Since tickcount is implemented in the function called sys_tickcount_sc instead of sys_tickount I specify it after the prototype with a : and the name of the function that implements the system call.
-int tickcount(void) : sys_tickcount_sc
+# Since get_cpu_ticks is implemented in the function called sys_tickcount_sc instead of sys_tickount I specify it after the prototype with a : and the name of the function that implements the system call.
+int get_cpu_ticks(void) : sys_tickcount_sc
 
 // ulib.c
 // All of these have : with nothing afterwards as they are not system calls.
@@ -51,9 +51,19 @@ int atoi(const char*); :
 
 ? thread.h
 # The above line tells gensyss.pl that the following methods until the end of the file or the  next line that begins with a ? (whichever comes first) need to be in threads.h instead of user.h or whatever the second argument to gensyss.pl was.
+typedef struct _mutex_t {
+  uint locked;   // Is the lock held?
+} mutex_t;
+typedef struct _cond_t {
+  char unused;
+} cond_t;
 int thread_create(void *(*start_routine)(void*), void *arg); :
-void thread_wait(void); :
-
+int thread_wait(void);
+void mutex_lock(mutex_t *m); :
+void mutex_unlock(mutex_t *m); :
+int cond_wait(cond_t *c, mutex_t *m); :
+int cond_signal(cond_t *c);
+ 
 ? threadsInt.h
 int thread_fork(void*);
-int thread_wait_internal();
+int cond_sleep_and_unlock_mutex(cond_t *c, mutex_t *m);
