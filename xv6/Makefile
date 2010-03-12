@@ -105,7 +105,6 @@ UPROGS=\
 	_usertests\
 	_wc\
 	_zombie\
-	_ticktest\
 	_mytests\
 
 _%: %.o $(ULIB)
@@ -121,7 +120,7 @@ fs.img: mkfs README $(UPROGS)
 
 clean: 
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
-	*.o *.d *.asm *.sym vectors.S parport.out usys.S user.h sysjump.h\
+	*.o *.d *.asm *.sym vectors.S parport.out thread.h threadInt.h usys.S user.h sysjump.h\
 	bootblock kernel xv6.img fs.img mkfs \
 	$(UPROGS)
 
@@ -134,6 +133,10 @@ xv6.pdf: $(PRINT)
 
 print: xv6.pdf
 
+user.h: user.h.in
+	perl gensyss.pl
+gensyss: user.h
+
 # run in emulators
 
 bochs : fs.img xv6.img
@@ -143,7 +146,4 @@ bochs : fs.img xv6.img
 qemu: fs.img xv6.img
 	qemu -parallel stdio -hdb fs.img xv6.img
 
-user.h: user.h.in
-	perl gensyss.pl
-gensyss: user.h
 

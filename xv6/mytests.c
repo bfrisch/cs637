@@ -11,6 +11,12 @@ volatile int x = 0;
 mutex_t lock;
 mutex_t print_lock;
 
+void ticksTest() {
+  printf(1, "Current tick count is now: %d!\n", get_cpu_ticks());
+  sleep(100);
+  printf(1, "Current tick count is now: %d!\n", get_cpu_ticks());
+}
+
 void processTest() {
   int i;
   for (i = 1; i <= NUM_PROCS; i++) {
@@ -98,19 +104,22 @@ lock_increment(void* arg)
 
 int main(int argc, char* argv[]) 
 {
-  int testNum = 1;
+  int testNum = 2;
   if (argc == 2) {
     testNum = atoi(argv[1]);
   }
 
   switch (testNum) {
   case 1:
-    processTest();
+    ticksTest();
     break;
   case 2:
-    threadTest(&race_increment);
+    processTest();
     break;
   case 3:
+    threadTest(&race_increment);
+    break;
+  case 4:
     printf(1, "Starting test 3!");
     threadTest(&lock_increment);
     break;
