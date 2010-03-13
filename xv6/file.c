@@ -125,4 +125,11 @@ filewrite(struct file *f, char *addr, int n)
   panic("filewrite");
 }
 
-
+int filecheck(struct file* f, int n) {
+  if (f->type == FD_PIPE) {
+    return 0;
+  }
+  if (f->type == FD_INODE) {
+  }
+  panic("filecheck");
+}

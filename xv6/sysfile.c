@@ -69,6 +69,16 @@ sys_write(void)
 }
 
 int
+sys_check(void) {
+  struct file *f;
+  int offset;
+  if (argfd(0, 0, &f) < 0 || argint(1, &offset) < 0) {
+    return -1;
+  }
+  return filecheck(f, offset);
+}
+
+int
 sys_dup(void)
 {
   struct file *f;

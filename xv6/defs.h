@@ -30,6 +30,7 @@ void            fileinit(void);
 int             fileread(struct file*, char*, int n);
 int             filestat(struct file*, struct stat*);
 int             filewrite(struct file*, char*, int n);
+int             filecheck(struct file*, int n);
 
 // fs.c
 int             dirlink(struct inode*, char*, uint);

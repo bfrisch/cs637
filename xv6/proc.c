@@ -191,8 +191,8 @@ copyproc_thread(struct proc *p, int usrstck)
 
   // set new thread to point to new stack.
   np->tf->ebp = (uint)(usrstck) + 1008;
-  np->tf->esp = (uint)(usrstck) + 996;
-  memmove(np->mem + (uint)(np->tf->esp), (p->mem + p->tf->esp), 32);
+  np->tf->esp = (uint)(usrstck) + 980;
+  memmove(np->mem + (uint)(np->tf->esp), (p->mem + p->tf->esp), 44);
   
   // Clear %eax so that fork system call returns 0 in child.
   np->tf->eax = 0;

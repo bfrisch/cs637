@@ -29,7 +29,7 @@ int sleep(int);
 unsigned int fcount(void);
 int proc_tickets(int);
 // gensys.pl supports multiword variable names too.
-
+int check(int fd, int offset);
 # Since get_cpu_ticks is implemented in the function called sys_tickcount_sc instead of sys_tickount I specify it after the prototype with a : and the name of the function that implements the system call.
 int get_cpu_ticks(void) : sys_tickcount_sc
 
