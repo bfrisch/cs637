@@ -16,7 +16,7 @@ xchg(volatile uint *addr, uint newval)
   return result;
 }
 
-int thread_create(void *(*start_routine)(void*), void* arg) {
+int thread_create(void (*start_routine)(void*), void* arg) {
   void* stack;
   if ((stack = malloc(1024)) == 0) {
     return -1;

@@ -57,7 +57,7 @@ typedef struct _mutex_t {
 typedef struct _cond_t {
   char unused;
 } cond_t;
-int thread_create(void *(*start_routine)(void*), void *arg); :
+int thread_create(void (*start_routine)(void*), void *arg); :
 int thread_wait(void);
 void mutex_lock(mutex_t *m); :
 void mutex_unlock(mutex_t *m); :

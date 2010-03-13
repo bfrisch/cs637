@@ -2,6 +2,7 @@
 #include "user.h"
 #include "printf.h"
 #include "thread.h"
+#include "fcntl.h"
 
 #define ITERATIONS 100000
 #define COND_ITERS 5
@@ -54,10 +55,10 @@ void process_test() {
   }
 }
 
-void thread_test(void *(*start_routine)(void*)) {
+void thread_test(void (*start_routine)(void*)) {
   int i;
   for (i = 0; i < NUM_THREADS; i++) { 
-    int mythreadid = thread_create(start_routine, &x);
+    int mythreadid = thread_create(start_routine, (void*) &x);
     mutex_lock(&print_lock);    
     printf(1, "Create: %d!\n", mythreadid);
     mutex_unlock(&print_lock);
@@ -80,7 +81,6 @@ race_increment(void* arg)
   int i;
   printf(1, "Begin: %d!\n", getpid());
   for(i = 0; i < ITERATIONS; i++) {
-    //printf(1, "%d t%d!\n", x, getpid());
     int xTemp = x;
     xTemp++;
     x=xTemp;
@@ -103,26 +103,28 @@ lock_increment(void* arg)
   }
 }
 
-void *producer(void *arg) {
+void producer(void *arg) {
   int i, j;
-  for (i = 0; i < COND_ITERS; i++) {
+  for (i = 0; i < COND_ITERS * 2; i++) {
     mutex_lock(&cond_mutex);            // p1
+    printf(1, "Starting producer!!\n");
     while (numfilled == BUFF_SIZE)      // p2
       cond_wait(&empty, &cond_mutex);   // p3
     for (j = 0; j < BUFF_SIZE; j++) {
       cond_arr[j] = i;                  // p4
       numfilled++;
     }
+    printf(1, "Signaling consumer!!\n\n");
     cond_signal(&fill);                 // p5
     mutex_unlock(&cond_mutex);          // p6
   }
-  return 0;
 }
 
-void *consumer(void *arg) {
+void consumer(void *arg) {
   int i, j;
   for (i = 0; i < COND_ITERS; i++) {
     mutex_lock(&cond_mutex);
+    printf(1, "Starting consumer!\n");
     while (numfilled == 0)
       cond_wait(&fill, &cond_mutex);
     for (j = 0; j < BUFF_SIZE; j++) {
@@ -130,10 +132,11 @@ void *consumer(void *arg) {
       numfilled--;
     }
     printf(1, "\n");
+    printf(1, "Signalling empty!\n");
     cond_signal(&empty);
     mutex_unlock(&cond_mutex);
   }
-  return 0;
+  printf(1, "\n\nConsumer dying!!\nGoodbye cruel world!\n\n");
 }
 
 void cond_test() {
@@ -147,16 +150,15 @@ void cond_test() {
 }
 
 void cache_test() {
-/*  int fd = open("cacheTest", O_CREATE|O_RDWR);
-  char* string = "I am a long string of text that should go in the file so that it will not be all cached.  At least I hope that is the case, as if it is not, I will be sad and very unhappy in generall!!!!  That is all for now in cs 637.  which is a class of fun and overall excitement.  Thanks, and have a good day!";
-  if (write(fd, string, strlen(string) < 0)) {
+  int fd = open("cacheTest", O_CREATE|O_RDWR);
+  char* string = "I am a long string of text that should go in the file so that it will not be all cached.\nAt least I hope that is the case, as if it is not, I will be sad and very unhappy in generall!!!!\nThat is all for now in Professor Remizi's CS 637 class.  Which is a class of fun and overall excitement.\nHowever, sometimes my code doesn't work right the first time, so I have to fix bugs.\nIn fact, I belive, that programming is 25% writing code, and 75% debugging.\nHowever, debugging is not an appropriate thing to do while presenting as it is embarssing.\nSo, I hope I don't have to do that.\nThanks, and have a good day!\n";
+  if (write(fd, string, strlen(string)) < 0) {
       printf(1, "Error!! Write failed!\n");
   }
   close(fd);
 
-  int fd = open("cacheTest", O_RDONLY);
-  //open("test"
-  //printf(*/
+  fd = open("cacheTest", O_RDONLY);
+  close(fd);
 }
 
 int main(int argc, char* argv[]) 

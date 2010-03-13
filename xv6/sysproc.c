@@ -142,6 +142,7 @@ int sys_cond_sleep_and_unlock_mutex(void) {
   if (argint(0, &cond_addr) < 0 || argint(1, &mutex_addr) < 0) {
     return -1;
   }
+  sleep_on_cond(cond_addr, mutex_addr);
 }
 
 int sys_cond_signal(void) {
