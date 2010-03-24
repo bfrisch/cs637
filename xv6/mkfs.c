@@ -7,9 +7,9 @@
 #include "types.h"
 #include "fs.h"
 
-int nblocks = 995;
+int nblocks = -1; // Number of free blocks?
 int ninodes = 200;
-int size = 1024;
+int size = -1;
 
 int fsfd;
 struct superblock sb;
@@ -53,33 +53,36 @@ xint(uint x)
 int
 main(int argc, char *argv[])
 {
-  int i, cc, fd;
+  int i, cc, fd, kb_fs_size;
   uint rootino, inum, off;
   struct dirent de;
   char buf[512];
   struct dinode din;
 
-  if(argc < 2){
-    fprintf(stderr, "Usage: mkfs fs.img files...\n");
+  if(argc < 3 || (argc > 2 && (kb_fs_size = atoi(argv[1])) == 0)) {
+    fprintf(stderr, "Usage: mkfs fs_size fs.img files...\n");
     exit(1);
   }
 
   assert((512 % sizeof(struct dinode)) == 0);
   assert((512 % sizeof(struct dirent)) == 0);
 
-  fsfd = open(argv[1], O_RDWR|O_CREAT|O_TRUNC, 0666);
+  fsfd = open(argv[2], O_RDWR|O_CREAT|O_TRUNC, 0666);
   if(fsfd < 0){
-    perror(argv[1]);
+    perror(argv[2]);
     exit(1);
   }
 
-  sb.size = xint(size);
-  sb.nblocks = xint(nblocks); // so whole disk is size sectors
-  sb.ninodes = xint(ninodes);
+  size = (kb_fs_size * 1024) / BSIZE;
 
   bitblocks = size/(512*8) + 1;
   usedblocks = ninodes / IPB + 3 + bitblocks;
   freeblock = usedblocks;
+  nblocks = size - usedblocks;
+
+  sb.size = xint(size);
+  sb.nblocks = xint(nblocks); // so whole disk is size sectors
+  sb.ninodes = xint(ninodes);
 
   printf("used %d (bit %d ninode %lu) free %u total %d\n", usedblocks,
          bitblocks, ninodes/IPB + 1, freeblock, nblocks+usedblocks);
@@ -104,7 +107,7 @@ main(int argc, char *argv[])
   strcpy(de.name, "..");
   iappend(rootino, &de, sizeof(de));
 
-  for(i = 2; i < argc; i++){
+  for(i = 3; i < argc; i++){
     assert(index(argv[i], '/') == 0);
 
     if((fd = open(argv[i], 0)) < 0){
@@ -242,7 +245,7 @@ iappend(uint inum, void *xp, int n)
   uint fbn, off, n1;
   struct dinode din;
   char buf[512];
-  uint indirect[NINDIRECT];
+  uint indirect[BSIZE / sizeof(uint)];
   uint x;
 
   rinode(inum, &din);
@@ -258,19 +261,29 @@ iappend(uint inum, void *xp, int n)
       }
       x = xint(din.addrs[fbn]);
     } else {
-      if(xint(din.addrs[INDIRECT]) == 0) {
-        // printf("allocate indirect block\n");
-        din.addrs[INDIRECT] = xint(freeblock++);
+      if(xint(din.addrs[NDIRECT]) == 0) {
+        //printf("allocate first indirect block\n");
+        din.addrs[NDIRECT] = xint(freeblock++);
         usedblocks++;
       }
-      // printf("read indirect block\n");
-      rsect(xint(din.addrs[INDIRECT]), (char*) indirect);
-      if(indirect[fbn - NDIRECT] == 0) {
-        indirect[fbn - NDIRECT] = xint(freeblock++);
+      //printf("read indirect block\n");
+      rsect(xint(din.addrs[NDIRECT]), (char*) indirect);
+      int indir_num = (fbn - NDIRECT) / (BSIZE/sizeof(uint));
+      if(indirect[indir_num] == 0) {
+        indirect[indir_num] = xint(freeblock++);
         usedblocks++;
-        wsect(xint(din.addrs[INDIRECT]), (char*) indirect);
+        wsect(xint(din.addrs[NDIRECT]), (char*) indirect);
       }
-      x = xint(indirect[fbn-NDIRECT]);
+      int sect_to_read = indirect[indir_num];
+      rsect(xint(sect_to_read), (char*) indirect);
+      indir_num = (fbn - NDIRECT) % (BSIZE/sizeof(uint));
+      if (indirect[indir_num] == 0) {
+	//printf("Alloc second indirect block!\n");
+	indirect[indir_num] = xint(freeblock++);
+	usedblocks++;
+	wsect(xint(sect_to_read), (char*) indirect);
+      }
+      x = xint(indirect[indir_num]);
     }
     n1 = min(n, (fbn + 1) * 512 - off);
     rsect(x, buf);

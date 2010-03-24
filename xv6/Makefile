@@ -114,7 +114,8 @@ _%: %.o $(ULIB)
 
 
 fs.img: mkfs README $(UPROGS)
-	./mkfs fs.img README $(UPROGS)
+# 16 MB file system
+	./mkfs 16192 fs.img README remzi.txt $(UPROGS)
 
 -include *.d
 
