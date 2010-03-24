@@ -23,8 +23,6 @@ int thread_create(void (*start_routine)(void*), void* arg) {
   }
   int childThreadId = thread_fork(stack);
   if (childThreadId == 0) {
-    //printf(1, "SR:%d!\n", start_routine); 
-    sleep(100);
     (*start_routine)(arg);
     exit();
   }

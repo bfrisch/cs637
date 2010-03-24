@@ -141,7 +141,7 @@ void consumer(void *arg) {
 
 void cond_test() {
   if (thread_create(&producer, 0) < 1 || thread_create(&consumer, 0) < 1 || thread_create(&consumer, 0) < 1) {
-    printf(1, "ERROR!!!! create_thread failed somewhere!!");
+    printf(1, "ERROR!!!! thread_create failed somewhere!!");
     return;
   }
   thread_wait();

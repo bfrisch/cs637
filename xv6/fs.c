@@ -617,3 +617,7 @@ nameiparent(char *path, char *name)
 {
   return _namei(path, 1, name);
 }
+
+int checki(struct inode* i, int off) {
+  return -1;
+}
