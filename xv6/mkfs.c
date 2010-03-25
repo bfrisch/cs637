@@ -59,7 +59,7 @@ main(int argc, char *argv[])
   char buf[512];
   struct dinode din;
 
-  if(argc < 3 || (argc > 2 && (kb_fs_size = atoi(argv[1])) == 0)) {
+  if(argc < 3 || (argc > 2 && (kb_fs_size = atoi(argv[1])) < 1)) {
     fprintf(stderr, "Usage: mkfs fs_size fs.img files...\n");
     exit(1);
   }
