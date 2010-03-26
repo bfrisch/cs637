@@ -644,6 +644,9 @@ nameiparent(char *path, char *name)
   return _namei(path, 1, name);
 }
 
-int checki(struct inode* i, int off) {
-  return -1;
+int checki(struct inode* ip, int off) {
+  int block_num = bmap(ip, off/BSIZE, 0);
+  if (block_num < 0)
+    return 0;
+  return bcheck(ip->dev, block_num);
 }

@@ -9,6 +9,7 @@ struct stat;
 
 // bio.c
 void            binit(void);
+int             bcheck(uint, uint);
 struct buf*     bread(uint, uint);
 void            brelse(struct buf*);
 void            bwrite(struct buf*);
@@ -49,6 +50,7 @@ struct inode*   nameiparent(char*, char*);
 int             readi(struct inode*, char*, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, char*, uint, uint);
+int             checki(struct inode* ip, int off);
 
 // ide.c
 void            ide_init(void);

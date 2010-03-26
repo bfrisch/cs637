@@ -106,6 +106,7 @@ UPROGS=\
 	_wc\
 	_zombie\
 	_mytests\
+	_fstests\
 
 _%: %.o $(ULIB)
 	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $@ $^

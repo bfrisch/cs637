@@ -126,7 +126,7 @@ filewrite(struct file *f, char *addr, int n)
 }
 
 int filecheck(struct file* f, int n) {
-  if (f->readable == 0 || f->writable == 0)
+  if (f->readable == 0 && f->writable == 0)
     return -1;
   if (f->type == FD_PIPE)
     return 0;
