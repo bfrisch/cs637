@@ -28,11 +28,12 @@ char* sbrk(int);
 int sleep(int);
 unsigned int fcount(void);
 int proc_tickets(int);
+void fsync(void);
 // gensys.pl supports multiword variable names too.
 int check(int fd, int offset);
 # Since get_cpu_ticks is implemented in the function called sys_tickcount_sc instead of sys_tickount I specify it after the prototype with a : and the name of the function that implements the system call.
 int get_cpu_ticks(void) : sys_tickcount_sc
-
+void pbjFSck(void);
 // ulib.c
 // All of these have : with nothing afterwards as they are not system calls.
 # The :'s tell gensyss.pl to just include the function definition in user.h instead of considering it a system call and hooking it up to the system call path.

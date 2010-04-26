@@ -1,3 +1,5 @@
+#include "pbj.h"
+
 struct buf;
 struct context;
 struct file;
@@ -13,6 +15,8 @@ int             bcheck(uint, uint);
 struct buf*     bread(uint, uint);
 void            brelse(struct buf*);
 void            bwrite(struct buf*);
+void            pbjFSck(uint);
+void            jfull_flush(void);
 
 // console.c
 void            console_init(void);
@@ -67,6 +71,10 @@ char*           kalloc(int);
 void            kfree(char*, int);
 void            kinit(void);
 
+// kmalloc.c
+char*           kmalloc(int);
+void            kmfree(char*, int);
+
 // kbd.c
 void            kbd_intr(void);
 
@@ -98,6 +106,8 @@ struct proc*    copyproc(struct proc*);
 struct proc*    copyproc_thread(struct proc*, int);
 
 struct proc*    curproc(void);
+struct mem_trans* curmt(void);
+void            resetcurtrans(void);
 unsigned int    fcount(void);
 void            exit(void);
 int             growproc(int);

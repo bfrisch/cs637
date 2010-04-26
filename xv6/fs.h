@@ -3,7 +3,11 @@
 
 // Block 0 is unused.
 // Block 1 is super block.
-// Inodes start at block 2.
+// Journal starts at block 2
+// Inodes start at block 2 + journal_size.
+
+#ifndef __FS_H_
+#define __FS_H_
 
 #define BSIZE 512  // block size
 
@@ -38,19 +42,22 @@ struct dinode {
 #define IPB           (BSIZE / sizeof(struct dinode))
 
 // Block containing inode i
-#define IBLOCK(i)     ((i) / IPB + 2)
+#define IBLOCK(i)     ((i) / IPB + 2 + NJB)
 
 // Bitmap bits per block
 #define BPB           (BSIZE*8)
 
 // Block containing bit for block b
-#define BBLOCK(b, ninodes) (b/BPB + (ninodes)/IPB + 3)
+#define BBLOCK(b, ninodes) (b/BPB + (ninodes)/IPB + 3 + NJB)
 
 // Directory is a file containing a sequence of dirent structures.
 #define DIRSIZ 14
+
+typedef unsigned short list_entry_t;
 
 struct dirent {
   ushort inum;
   char name[DIRSIZ];
 };
 
+#endif /* __FS_H_ */

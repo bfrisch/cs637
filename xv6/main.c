@@ -84,4 +84,3 @@ bootothers(void)
       ;
   }
 }
-

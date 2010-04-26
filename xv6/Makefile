@@ -7,6 +7,7 @@ OBJS = \
 	ide.o\
 	ioapic.o\
 	kalloc.o\
+	kmalloc.o\
 	kbd.o\
 	lapic.o\
 	main.o\
@@ -107,6 +108,8 @@ UPROGS=\
 	_zombie\
 	_mytests\
 	_fstests\
+	_pbjd\
+	_fsck\
 
 _%: %.o $(ULIB)
 	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $@ $^
@@ -116,7 +119,7 @@ _%: %.o $(ULIB)
 
 fs.img: mkfs README $(UPROGS)
 # 16 MB file system
-	./mkfs 16192 fs.img README remzi.txt $(UPROGS)
+	./mkfs 1000 fs.img small_remzi.txt README $(UPROGS)
 
 -include *.d
 

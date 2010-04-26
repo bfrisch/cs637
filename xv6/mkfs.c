@@ -6,10 +6,13 @@
 #include <assert.h>
 #include "types.h"
 #include "fs.h"
+#include "pbj.h"
+#include "param.h"
 
 int nblocks = -1; // Number of free blocks?
 int ninodes = 200;
 int size = -1;
+int jblocks = -1;
 
 int fsfd;
 struct superblock sb;
@@ -26,6 +29,7 @@ void rinode(uint inum, struct dinode *ip);
 void rsect(uint sec, void *buf);
 uint ialloc(ushort type);
 void iappend(uint inum, void *p, int n);
+void jinit(void);
 
 // convert to intel byte order
 ushort
@@ -66,6 +70,7 @@ main(int argc, char *argv[])
 
   assert((512 % sizeof(struct dinode)) == 0);
   assert((512 % sizeof(struct dirent)) == 0);
+  assert(kb_fs_size <= 32767); // Limit is 32 MB FS Size
 
   fsfd = open(argv[2], O_RDWR|O_CREAT|O_TRUNC, 0666);
   if(fsfd < 0){
@@ -73,19 +78,19 @@ main(int argc, char *argv[])
     exit(1);
   }
 
-  size = (kb_fs_size * 1024) / BSIZE;
-
-  bitblocks = size/(512*8) + 1;
-  usedblocks = ninodes / IPB + 3 + bitblocks;
-  freeblock = usedblocks;
-  nblocks = size - usedblocks;
+  size = (kb_fs_size * 1024) / BSIZE; // Total blocks in FS
+  jblocks = NJB; // Total blocks used for journal
+  bitblocks = size/(512*8) + 1; // Number of blocks used for bitmap.
+  usedblocks = (ninodes / IPB) + 3 + bitblocks + jblocks; // Number of blocks in use right now
+  freeblock = usedblocks; // Address of first free block.
+  nblocks = size - usedblocks; // Total free blocks available
 
   sb.size = xint(size);
   sb.nblocks = xint(nblocks); // so whole disk is size sectors
   sb.ninodes = xint(ninodes);
 
-  printf("used %d (bit %d ninode %lu) free %u total %d\n", usedblocks,
-         bitblocks, ninodes/IPB + 1, freeblock, nblocks+usedblocks);
+  printf("used %d (bit %d ninode %lu journal %d) free %u total %d\n", usedblocks,
+         bitblocks, ninodes/IPB + 1, jblocks, freeblock, nblocks+usedblocks);
 
   assert(nblocks + usedblocks == size);
 
@@ -93,6 +98,7 @@ main(int argc, char *argv[])
     wsect(i, zeroes);
 
   wsect(1, &sb);
+  jinit();
 
   rootino = ialloc(T_DIR);
   assert(rootino == 1);
@@ -163,7 +169,7 @@ wsect(uint sec, void *buf)
 uint
 i2b(uint inum)
 {
-  return (inum / IPB) + 2;
+  return (inum / IPB) + 2 + jblocks;
 }
 
 void
@@ -191,6 +197,43 @@ rinode(uint inum, struct dinode *ip)
   rsect(bn, buf);
   dip = ((struct dinode*) buf) + (inum % IPB);
   *ip = *dip;
+}
+
+void
+jinit () {
+  int i = 0;
+  // Write out uber-block
+  struct jsblock jsb;
+  jsb.size = xint(jblocks - 1);
+  jsb.head_block = xint(3);
+  jsb.tail_block = xint(8);
+  jsb.time_stamp = xint(0);
+  jsb.replay_journal = xint(1);
+  wsect(2, &jsb);
+  
+  // Write out our test entry header
+  struct jtrans trans;
+  trans.checksum = xint(555);
+  trans.num_data_blocks = xint(5);
+  trans.blocklist[0] = xint(freeblock+1);
+  trans.blocklist[1] = xint(freeblock+2);
+  trans.blocklist[2] = xint(freeblock+3);
+  trans.blocklist[3] = xint(freeblock+4);
+  trans.blocklist[4] = xint(freeblock+5);
+  wsect(3, &trans);
+
+  char block[512];
+  for (i = 0; i < 512; i+=4) {
+    block[i] = 'B';
+    block[i + 1] = 'P';
+    block[i + 2] = 'J';
+    block[i + 3] = '1';
+  }
+  wsect(4, &block);
+  wsect(5, &block);
+  wsect(6, &block);
+  wsect(7, &block);
+  wsect(8, &block);
 }
 
 void
@@ -232,8 +275,8 @@ balloc(int used)
   for(i = 0; i < used; i++) {
     buf[i/8] = buf[i/8] | (0x1 << (i%8));
   }
-  printf("balloc: write bitmap block at sector %lu\n", ninodes/IPB + 3);
-  wsect(ninodes / IPB + 3, buf);
+  printf("balloc: write bitmap block at sector %lu\n", ninodes/IPB + jblocks + 3);
+  wsect(ninodes / IPB + jblocks +  3, buf);
 }
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -253,7 +296,8 @@ iappend(uint inum, void *xp, int n)
   off = xint(din.size);
   while(n > 0){
     fbn = off / 512;
-    assert(fbn < MAXFILE);
+  
+  assert(fbn < MAXFILE);
     if(fbn < NDIRECT) {
       if(xint(din.addrs[fbn]) == 0) {
         din.addrs[fbn] = xint(freeblock++);

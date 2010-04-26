@@ -43,6 +43,7 @@ struct proc {
   char name[16];            // Process name (debugging)
   int tctcnt;               // Total Ticket Count Assigned to this process
   int cond_addr;
+  struct mem_trans* ct;
 };
 
 // Process memory is laid out contiguously, low addresses first:
@@ -61,6 +62,7 @@ struct cpu {
   volatile uint booted;        // Has the CPU started?
   int ncli;                   // Depth of pushcli nesting.
   int intena;                 // Were interrupts enabled before pushcli? 
+  struct transaction* ct;
 };
 
 extern struct cpu cpus[NCPU];

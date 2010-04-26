@@ -5,6 +5,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "pbj.h"
 
 struct spinlock proc_table_lock;
 
@@ -17,6 +18,18 @@ extern void forkret1(struct trapframe*);
 extern unsigned int fastrand(unsigned int s);
 int ttltcts = 0; 
 
+struct mem_trans*
+curmt(void) {
+  return curproc()->ct;
+}
+
+void
+resetcurtrans(void) {
+  struct mem_trans* ct = (struct mem_trans*) kalloc(sizeof(struct mem_trans));
+  ct->size = 0;
+  ct->bufs = 0;
+  curproc()->ct = ct;
+}
 
 void
 pinit(void)
@@ -40,6 +53,11 @@ allocproc(void)
       p->state = EMBRYO;
       p->pid = nextpid++;
       p->tctcnt = 100;
+
+      p->ct = (struct mem_trans*) kmalloc(sizeof(struct mem_trans));
+      p->ct->bufs = 0;
+      p->ct->size = 0;
+
       ttltcts += 100;
       release(&proc_table_lock);
       return p;
