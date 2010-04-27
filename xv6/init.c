@@ -5,7 +5,7 @@
 #include "user.h"
 #include "fcntl.h"
 
-char *ls_args[] = { "ls", 0 };
+char *sh_args[] = {"sh", 0 };
 char *fsck_args[] = { "fsck", 0 };
 char *pbjd_args[] = { "pbjd", 0 };
 
@@ -20,7 +20,7 @@ main(void)
   dup(0);  // stdout
   dup(0);  // stderr
 
-  /*printf(1, "init: running fsck\n");
+  printf(1, "init: running fsck\n");
   pid = fork();
   if (pid < 0) {
     printf(1, "init: fork failed\n");
@@ -43,7 +43,9 @@ main(void)
     exec("pbjd", pbjd_args);
     printf(1, "init: exec pbjd failed\n");
     exit();
-    }*/
+    }
+
+    printf(1, "init: starting ls\n");
 
   for(;;){
     printf(1, "init: starting ls\n");
@@ -53,7 +55,7 @@ main(void)
       exit();
     }
     if(pid == 0){
-      exec("ls", ls_args);
+      exec("sh", sh_args);
       printf(1, "init: exec sh failed\n");
       exit();
     }

@@ -40,7 +40,7 @@ int             filecheck(struct file*, int n);
 // fs.c
 int             dirlink(struct inode*, char*, uint);
 struct inode*   dirlookup(struct inode*, char*, uint*);
-struct inode*   ialloc(uint, short);
+struct inode*   icreate(uint, short, short, short, short);
 struct inode*   idup(struct inode*);
 void            iinit(void);
 void            ilock(struct inode*);

@@ -264,7 +264,7 @@ iunlockput(struct inode *ip)
 
 // Allocate a new inode with the given type on device dev.
 struct inode*
-ialloc(uint dev, short type)
+icreate(uint dev, short type, short major, short minor, short nlink)
 {
   int inum;
   struct buf *bp;
@@ -272,14 +272,21 @@ ialloc(uint dev, short type)
   struct superblock sb;
 
   readsb(dev, &sb);
+  cprintf("sb.ninodes is %d!\n", sb.ninodes);
   for(inum = 1; inum < sb.ninodes; inum++){  // loop over inode blocks
     bp = bread(dev, IBLOCK(inum));
     dip = (struct dinode*)bp->data + inum%IPB;
     if(dip->type == 0){  // a free inode
-      memset(dip, 0, sizeof(*dip));
+      cprintf("Allocating inode!\n");
+      memset(dip, 0, sizeof(struct dinode));
       dip->type = type;
-      bwrite(bp);   // mark it allocated on the disk
+      dip->major = major;
+      dip->minor = minor;
+      dip->nlink = nlink;
+      bwrite(bp);
       brelse(bp);
+      end_trans();
+      jfull_flush();
       return iget(dev, inum);
     }
     brelse(bp);
@@ -517,7 +524,10 @@ dirlookup(struct inode *dp, char *name, uint *poff)
           *poff = off + (uchar*)de - bp->data;
         inum = de->inum;
         brelse(bp);
-        return iget(dp->dev, inum);
+	cprintf("About to iget!");
+	struct inode* rv = iget(dp->dev, inum);
+	cprintf("I got it!\n");
+	return rv;
       }
     }
     brelse(bp);

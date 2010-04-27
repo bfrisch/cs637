@@ -25,7 +25,7 @@ curmt(void) {
 
 void
 resetcurtrans(void) {
-  struct mem_trans* ct = (struct mem_trans*) kalloc(sizeof(struct mem_trans));
+  struct mem_trans* ct = (struct mem_trans*) kmalloc(sizeof(struct mem_trans));
   ct->size = 0;
   ct->bufs = 0;
   curproc()->ct = ct;

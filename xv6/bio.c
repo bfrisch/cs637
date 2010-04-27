@@ -27,6 +27,7 @@
 #include "spinlock.h"
 #include "pbj.h"
 #include "fs.h"
+#include "x86.h"
 
 struct buf buf[NBUF];
 struct spinlock buf_table_lock;
@@ -44,7 +45,7 @@ struct buf jtrans_header_buf;
 struct buf* jsblock_buf;
 struct jsblock* jsb;
 
-uint jtail_bnum;
+uint jtail_bnum = 3;
 
 struct mem_trans_node* mtn_head;
 struct mem_trans_node* mtn_tail;
@@ -103,7 +104,6 @@ bget(uint dev, uint sector)
     if((b->flags & (B_BUSY|B_VALID)) &&
        b->dev == dev && b->sector == sector){
       if(b->flags & B_BUSY){
-	cprintf("About to sleep in cache!");
         sleep(buf, &buf_table_lock);
         goto loop;
       }
@@ -162,10 +162,34 @@ void jbwrite(struct buf *b) {
   b->flags |= B_DIRTY;
   ide_rw(b);
   b->sector = orig_sector;
+  b->flags |= B_BUSY;
   jtail_bnum++;
   if (jtail_bnum > jsb->size + 2) {
     jtail_bnum = 3;
   }
+}
+
+
+// Release the buffer buf.
+void
+jbrelse(struct buf *b)
+{
+  if((b->flags & B_BUSY) == 0)
+    panic("brelse");
+
+  acquire(&buf_table_lock);
+
+  b->next->prev = b->prev;
+  b->prev->next = b->next;
+  b->next = bufhead.next;
+  b->prev = &bufhead;
+  bufhead.next->prev = b;
+  bufhead.next = b;
+
+  b->flags &= ~B_BUSY;
+  wakeup(buf);
+
+  release(&buf_table_lock);
 }
 
 void jfull_flush() {
@@ -180,7 +204,7 @@ void jfull_flush() {
     {
       cprintf("Writing buf sector %d!\n", curr_buf->item->sector);
       ide_rw(curr_buf->item);
-      brelse(curr_buf->item);
+      jbrelse(curr_buf->item);
     }
   }
  
@@ -266,8 +290,18 @@ pbjFSck(uint dev) {
 void 
 end_trans() {
   struct mem_trans* ct = curmt();
+
   if (ct->size > 0) {
-    acquire(&trans_write_lock);
+
+    // can't be interupted
+    pushcli();
+
+    while (xchg(&trans_write_lock.locked,1) == 1)
+      ;
+
+    // have lock now
+    popcli();
+
     // creating header for transaction
     jt.checksum = 555;
     jt.num_data_blocks = ct->size;
@@ -280,9 +314,12 @@ end_trans() {
     }
 
     memmove(jtrans_header_buf.data, &jt, sizeof(jt));
+    jtrans_header_buf.flags |= B_BUSY;
+    jtrans_header_buf.flags |= B_DIRTY;
     jbwrite(&jtrans_header_buf);
     for (curr_buf = ct->bufs; curr_buf; curr_buf = curr_buf->next) {
       jbwrite(curr_buf->item);
+      curr_buf->item->flags |= B_DIRTY;
     }
     struct mem_trans_node* new_mtn = (struct mem_trans_node*) kmalloc(sizeof(struct mem_trans_node));
     new_mtn->trans = ct;
@@ -295,14 +332,20 @@ end_trans() {
       mtn_tail->next = new_mtn;  // modifying transaction list tail
     }
     release(&jcache_lock);
+    
+    pushcli();
+    // done, return lock
+    xchg(&trans_write_lock.locked, 0);
+    popcli();
 
-    release(&trans_write_lock);
     if (jsb->size == 0) {
       jfull_flush();
     }
-    resetcurtrans(); // Impelement this in proc.c
+    cprintf("resetCurtrans!\n");
+    resetcurtrans(); // Implement this in proc.c
   }
 }
+
 
 // Release the buffer buf.
 void
@@ -311,17 +354,10 @@ brelse(struct buf *b)
   if((b->flags & B_BUSY) == 0)
     panic("brelse");
 
-  acquire(&buf_table_lock);
+  struct mem_trans* ct = curmt();
 
-  b->next->prev = b->prev;
-  b->prev->next = b->next;
-  b->next = bufhead.next;
-  b->prev = &bufhead;
-  bufhead.next->prev = b;
-  bufhead.next = b;
-
-  b->flags &= ~B_BUSY;
-  wakeup(buf);
-
-  release(&buf_table_lock);
+  if (ct->size == 0 || ((b->flags & B_DIRTY) == 0)) {
+    jbrelse(b);
+    return;
+  }
 }

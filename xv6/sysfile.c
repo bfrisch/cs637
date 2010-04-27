@@ -8,6 +8,7 @@
 #include "fsvar.h"
 #include "file.h"
 #include "fcntl.h"
+#include "pbj.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -65,7 +66,9 @@ sys_write(void)
 
   if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argptr(1, &p, n) < 0)
     return -1;
-  return filewrite(f, p, n);
+  int rv = filewrite(f, p, n);
+  end_trans();
+  return rv;
 }
 
 int
@@ -78,6 +81,12 @@ sys_check(void) {
   return filecheck(f, offset);
 }
 
+void
+sys_fsync(void)
+{
+  jfull_flush();
+}
+
 int
 sys_dup(void)
 {
@@ -86,9 +95,12 @@ sys_dup(void)
   
   if(argfd(0, 0, &f) < 0)
     return -1;
-  if((fd=fdalloc(f)) < 0)
+  if((fd=fdalloc(f)) < 0) {
+    end_trans();
     return -1;
+  }
   filedup(f);
+  end_trans();
   return fd;
 }
 
@@ -102,6 +114,7 @@ sys_close(void)
     return -1;
   cp->ofile[fd] = 0;
   fileclose(f);
+  end_trans();
   return 0;
 }
 
@@ -125,11 +138,14 @@ sys_link(void)
 
   if(argstr(0, &old) < 0 || argstr(1, &new) < 0)
     return -1;
-  if((ip = namei(old)) == 0)
+  if((ip = namei(old)) == 0) {
+    end_trans();
     return -1;
+  }
   ilock(ip);
   if(ip->type == T_DIR){
     iunlockput(ip);
+    end_trans();
     return -1;
   }
   ip->nlink++;
@@ -143,6 +159,7 @@ sys_link(void)
     goto bad;
   iunlockput(dp);
   iput(ip);
+  end_trans();
   return 0;
 
 bad:
@@ -152,6 +169,7 @@ bad:
   ip->nlink--;
   iupdate(ip);
   iunlockput(ip);
+  end_trans();
   return -1;
 }
 
@@ -181,18 +199,22 @@ sys_unlink(void)
 
   if(argstr(0, &path) < 0)
     return -1;
-  if((dp = nameiparent(path, name)) == 0)
+  if((dp = nameiparent(path, name)) == 0) {
+    end_trans();
     return -1;
+  }
   ilock(dp);
 
   // Cannot unlink "." or "..".
   if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0){
     iunlockput(dp);
+    end_trans();
     return -1;
   }
 
   if((ip = dirlookup(dp, name, &off)) == 0){
     iunlockput(dp);
+    end_trans();
     return -1;
   }
   ilock(ip);
@@ -202,6 +224,7 @@ sys_unlink(void)
   if(ip->type == T_DIR && !isdirempty(ip)){
     iunlockput(ip);
     iunlockput(dp);
+    end_trans();
     return -1;
   }
 
@@ -213,6 +236,7 @@ sys_unlink(void)
   ip->nlink--;
   iupdate(ip);
   iunlockput(ip);
+  end_trans();
   return 0;
 }
 
@@ -237,7 +261,7 @@ create(char *path, int canexist, short type, short major, short minor)
     return ip;
   }
 
-  if((ip = ialloc(dp->dev, type)) == 0){
+  if((ip = icreate(dp->dev, type, major, minor, 1)) == 0){
     iunlockput(dp);
     return 0;
   }
@@ -277,22 +301,31 @@ sys_open(void)
     return -1;
 
   if(omode & O_CREATE){
-    if((ip = create(path, 1, T_FILE, 0, 0)) == 0)
+    if((ip = create(path, 1, T_FILE, 0, 0)) == 0) {
+      end_trans();
       return -1;
+    }
   } else {
-    if((ip = namei(path)) == 0)
+    cprintf("Opening!\n");
+    if((ip = namei(path)) == 0) {
+      cprintf("Zero!");
+      end_trans();
       return -1;
+    }
+    cprintf("iLock(ip)\n");
     ilock(ip);
     if(ip->type == T_DIR && (omode & (O_RDWR|O_WRONLY))){
       iunlockput(ip);
+      end_trans();
       return -1;
     }
   }
-
+    cprintf("\nFile alloc\n");
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
       fileclose(f);
     iunlockput(ip);
+    end_trans();
     return -1;
   }
   iunlock(ip);
@@ -302,7 +335,8 @@ sys_open(void)
   f->off = 0;
   f->readable = !(omode & O_WRONLY);
   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
-
+  end_trans();
+  cprintf("Open done!\n");
   return fd;
 }
 
@@ -317,9 +351,14 @@ sys_mknod(void)
   if((len=argstr(0, &path)) < 0 ||
      argint(1, &major) < 0 ||
      argint(2, &minor) < 0 ||
-     (ip = create(path, 0, T_DEV, major, minor)) == 0)
+     (ip = create(path, 0, T_DEV, major, minor)) == 0) {
+    end_trans();
     return -1;
-  iunlockput(ip);
+  }
+  iput(ip);
+
+  end_trans();
+  cprintf("mknode done!\n");
   return 0;
 }
 
@@ -329,8 +368,11 @@ sys_mkdir(void)
   char *path;
   struct inode *ip;
 
-  if(argstr(0, &path) < 0 || (ip = create(path, 0, T_DIR, 0, 0)) == 0)
+  if(argstr(0, &path) < 0 || (ip = create(path, 0, T_DIR, 0, 0)) == 0) {
+    end_trans();
     return -1;
+  }
+  end_trans();
   iunlockput(ip);
   return 0;
 }
@@ -341,16 +383,20 @@ sys_chdir(void)
   char *path;
   struct inode *ip;
 
-  if(argstr(0, &path) < 0 || (ip = namei(path)) == 0)
+  if(argstr(0, &path) < 0 || (ip = namei(path)) == 0) {
+    end_trans();
     return -1;
+  }
   ilock(ip);
   if(ip->type != T_DIR){
+    end_trans();
     iunlockput(ip);
     return -1;
   }
   iunlock(ip);
   iput(cp->cwd);
   cp->cwd = ip;
+  end_trans();
   return 0;
 }
 
@@ -388,17 +434,26 @@ sys_pipe(void)
 
   if(argptr(0, (void*)&fd, 2*sizeof(fd[0])) < 0)
     return -1;
-  if(pipealloc(&rf, &wf) < 0)
+  if(pipealloc(&rf, &wf) < 0) {
+    end_trans();
     return -1;
+  }
   fd0 = -1;
   if((fd0 = fdalloc(rf)) < 0 || (fd1 = fdalloc(wf)) < 0){
     if(fd0 >= 0)
       cp->ofile[fd0] = 0;
     fileclose(rf);
     fileclose(wf);
+    end_trans();
     return -1;
   }
   fd[0] = fd0;
   fd[1] = fd1;
+  end_trans();
   return 0;
+}
+
+void
+sys_pbjFSck(void) {
+  pbjFSck(ROOTDEV);
 }
