@@ -58,6 +58,7 @@ exec(char *path, char **argv)
 
   // Load program into memory.
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
+
     if(readi(ip, (char*)&ph, off, sizeof(ph)) != sizeof(ph))
       goto bad;
     if(ph.type != ELF_PROG_LOAD)
@@ -68,6 +69,7 @@ exec(char *path, char **argv)
       goto bad;
     memset(mem + ph.va + ph.filesz, 0, ph.memsz - ph.filesz);
   }
+
   iunlockput(ip);
   
   // Initialize stack.

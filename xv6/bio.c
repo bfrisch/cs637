@@ -33,14 +33,15 @@ struct buf buf[NBUF];
 struct spinlock buf_table_lock;
 struct spinlock trans_write_lock;
 struct spinlock jcache_lock;
+struct spinlock jflush_lock;
 
 // Linked list of all buffers, through prev/next.
 // bufhead->next is most recently used.
 // bufhead->tail is least recently used.
 struct buf bufhead;
 struct buf jtail_buf;
-struct jtrans jt;
-struct buf jtrans_header_buf;
+struct jtrans* jt;
+struct buf* jtrans_header_buf;
 
 struct buf* jsblock_buf;
 struct jsblock* jsb;
@@ -58,7 +59,8 @@ binit(void)
   initlock(&buf_table_lock, "buf_table");
   initlock(&trans_write_lock, "trans_write");
   initlock(&jcache_lock, "jcache");
-  cprintf("Blocks inited!");
+  initlock(&jflush_lock, "jflush");
+  
   // Create linked list of buffers
   bufhead.prev = &bufhead;
   bufhead.next = &bufhead;
@@ -164,11 +166,11 @@ void jbwrite(struct buf *b) {
   b->sector = orig_sector;
   b->flags |= B_BUSY;
   jtail_bnum++;
+
   if (jtail_bnum > jsb->size + 2) {
-    jtail_bnum = 3;
+    jfull_flush();
   }
 }
-
 
 // Release the buffer buf.
 void
@@ -176,7 +178,6 @@ jbrelse(struct buf *b)
 {
   if((b->flags & B_BUSY) == 0)
     panic("brelse");
-
   acquire(&buf_table_lock);
 
   b->next->prev = b->prev;
@@ -193,34 +194,45 @@ jbrelse(struct buf *b)
 }
 
 void jfull_flush() {
- 
   struct mem_trans_node* curr_mtn;
   struct mem_trans_node* curr_tail = mtn_tail;
   struct t_data_node* curr_buf;
   
-  for (curr_mtn = mtn_head; curr_mtn != curr_tail->next; curr_mtn = curr_mtn->next) 
-    {
-    for (curr_buf = curr_mtn->trans->bufs; curr_buf; curr_buf = curr_buf->next) 
-    {
-      cprintf("Writing buf sector %d!\n", curr_buf->item->sector);
-      ide_rw(curr_buf->item);
-      jbrelse(curr_buf->item);
+  if (mtn_head != 0) {
+    acquire_sl(&trans_write_lock);
+    if (mtn_head != 0) {
+      for (curr_mtn = mtn_head; curr_mtn != curr_tail->next; curr_mtn = curr_mtn->next) 
+      {
+	for (curr_buf = curr_mtn->trans->bufs; curr_buf; curr_buf = curr_buf->next) 
+	  {
+	    //cprintf("%% Flush write sector %d!", curr_buf->item->sector);
+	    if (curr_buf->item->faliable)
+	      panic("Testing PBj0!");
+	    ide_rw(curr_buf->item);
+	    jbrelse(curr_buf->item);
+	  }
+      }
+      // Write the journal uber (super) block!
+      jsb->head_block = jsb->tail_block = 3;
+      jsb->time_stamp = 0;
+      jsblock_buf->flags |= B_DIRTY;
+      jsblock_buf->flags |= B_BUSY;
+      ide_rw(jsblock_buf);
+
+      mtn_head = curr_tail->next;
+      jtail_bnum = 3;
     }
+    release_sl(&trans_write_lock);
   }
- 
-  acquire(&jcache_lock);
-  mtn_head = curr_tail->next;
-  release(&jcache_lock);
-  cprintf("Z");
 }
 
 void
 pbjFSck(uint dev) {
   // Init head and tail...
-  cprintf("Reading uber block!\n");
+  cprintf("fsck: Checking PBj!\n");
   jsblock_buf = bread(dev, 2); // read journal uber block
   jsb = (struct jsblock*) &(jsblock_buf->data);
-  cprintf("Journal is of size: %d!\n", jsb->size);
+  cprintf("INFO: Journal is of size: %d and in use from block %d to block %d!\n", jsb->size, jsb->head_block, jsb->tail_block);
   struct buf** journal_blocks = (struct buf**) kmalloc(sizeof(struct buf*) * jsb->size);  // memory for entire journal
   int bnum;
   for (bnum = 0; bnum < jsb->size; bnum++) {
@@ -228,7 +240,6 @@ pbjFSck(uint dev) {
   }
 
   if (jsb->head_block < jsb->tail_block) {
-    cprintf("Head is less then tail\n");
     bnum = jsb->head_block - 3; // current transaction header block
     while (bnum < jsb->tail_block - 3) {
       // Read the transaction header block
@@ -237,12 +248,14 @@ pbjFSck(uint dev) {
       // Setup the transaction.
       struct mem_trans* mt = (struct mem_trans*) kmalloc(sizeof(struct mem_trans));
       mt->size = curr_jtrans->num_data_blocks;
+      cprintf("- Replaying transaction of size %d!\n", mt->size);
       
       // Make the head t_data_node;
       struct t_data_node* curr_tail = (struct t_data_node*) kmalloc(sizeof(struct t_data_node));
       curr_tail->item = journal_blocks[bnum+1];
       curr_tail->item->sector = curr_jtrans->blocklist[0];
       curr_tail->item->flags |= B_DIRTY;
+      cprintf("- Found changed block at %d!\n", curr_jtrans->blocklist[0]);
       mt->bufs = curr_tail;
 
       // Read the data in the transaction
@@ -257,12 +270,13 @@ pbjFSck(uint dev) {
 
 	// change the sector appropriatly
 	journal_blocks[tran_d_blk]->sector = curr_jtrans->blocklist[tran_d_blk-bnum - 1];
+	cprintf("- Found changed block at %d!\n", curr_jtrans->blocklist[tran_d_blk-bnum-1]);
 	curr_tail->next = tdn;
 	curr_tail = curr_tail->next;
       }
 
       // Verify the checksum!
-      if (curr_jtrans->checksum == 555) {
+      if (curr_jtrans->checksum == 'j') {
 	// Add the mem_trans to the tail of mem_trans_node list.
 	struct mem_trans_node* mtn = (struct mem_trans_node*) kmalloc(sizeof(struct mem_trans_node));                  
 	mtn->trans = mt;   // place transaction in node
@@ -281,10 +295,22 @@ pbjFSck(uint dev) {
       // Increment bnum
       bnum += mt->size+1;
     }
+  } else {
+    mtn_head = mtn_tail = 0;
+    cprintf("Empty journal.\n");
   }
-  cprintf("Doing full flush!!! Yay!!\n");
+
   // Flush the journal to disk!
   jfull_flush();
+
+  for (bnum = 0; bnum < jsb->size; bnum++) {
+    if ((journal_blocks[bnum]->flags & B_BUSY) != 0)
+      jbrelse(journal_blocks[bnum]); // release the rest of the journal
+  }
+
+  // Intialize the cache jtrans_header_buf.
+  jtrans_header_buf = bread(dev, 3); 
+  jt = (struct jtrans*) jtrans_header_buf->data;
 }
 
 void 
@@ -292,60 +318,49 @@ end_trans() {
   struct mem_trans* ct = curmt();
 
   if (ct->size > 0) {
-
-    // can't be interupted
-    pushcli();
-
-    while (xchg(&trans_write_lock.locked,1) == 1)
-      ;
-
-    // have lock now
-    popcli();
-
+    acquire_sl(&trans_write_lock);
     // creating header for transaction
-    jt.checksum = 555;
-    jt.num_data_blocks = ct->size;
+    jt->checksum = 'j';
+    jt->num_data_blocks = ct->size;
 
-    struct t_data_node* curr_buf;
+    struct t_data_node* curr_buf; 
     int curr_block_num = 0;
     for (curr_buf = ct->bufs; curr_buf; curr_buf = curr_buf->next) {
-      jt.blocklist[curr_block_num] = curr_buf->item->sector;
+      jt->blocklist[curr_block_num] = curr_buf->item->sector;
       curr_block_num++;
     }
 
-    memmove(jtrans_header_buf.data, &jt, sizeof(jt));
-    jtrans_header_buf.flags |= B_BUSY;
-    jtrans_header_buf.flags |= B_DIRTY;
-    jbwrite(&jtrans_header_buf);
+    jtrans_header_buf->flags |= B_DIRTY;
+    jtrans_header_buf->flags |= B_BUSY;
+    int i;
+    jbwrite(jtrans_header_buf);
+
     for (curr_buf = ct->bufs; curr_buf; curr_buf = curr_buf->next) {
       jbwrite(curr_buf->item);
       curr_buf->item->flags |= B_DIRTY;
+      curr_buf->item->faliable = should_panic;
     }
+
+    // Write the journal uber (super) block!
+    jsb->tail_block = jtail_bnum - 1;
+    jsb->time_stamp = 0;
+    jsblock_buf->flags |= B_DIRTY;
+    ide_rw(jsblock_buf);
+
     struct mem_trans_node* new_mtn = (struct mem_trans_node*) kmalloc(sizeof(struct mem_trans_node));
     new_mtn->trans = ct;
     new_mtn->next = 0;  // adding transaction to transaction list
 
-    acquire(&jcache_lock);
     if (mtn_head == 0) {
       mtn_tail = mtn_head = new_mtn;
     } else {
       mtn_tail->next = new_mtn;  // modifying transaction list tail
     }
-    release(&jcache_lock);
-    
-    pushcli();
-    // done, return lock
-    xchg(&trans_write_lock.locked, 0);
-    popcli();
+    release_sl(&trans_write_lock);
 
-    if (jsb->size == 0) {
-      jfull_flush();
-    }
-    cprintf("resetCurtrans!\n");
     resetcurtrans(); // Implement this in proc.c
   }
 }
-
 
 // Release the buffer buf.
 void

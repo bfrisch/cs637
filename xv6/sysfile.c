@@ -10,6 +10,8 @@
 #include "fcntl.h"
 #include "pbj.h"
 
+int should_panic = 0;
+
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
@@ -55,6 +57,12 @@ sys_read(void)
   if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argptr(1, &p, n) < 0)
     return -1;
   return fileread(f, p, n);
+}
+
+void
+sys_set_write_panic(void) {
+  if (argint(0, &should_panic) < 0)
+    return;
 }
 
 int
@@ -229,12 +237,12 @@ sys_unlink(void)
   }
 
   memset(&de, 0, sizeof(de));
+  cprintf("Unlink is here!");
   if(writei(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
     panic("unlink: writei");
   iunlockput(dp);
-
   ip->nlink--;
-  iupdate(ip);
+  iupdate(ip); // Get rid of this one day....
   iunlockput(ip);
   end_trans();
   return 0;
@@ -254,7 +262,8 @@ create(char *path, int canexist, short type, short major, short minor)
   if(canexist && (ip = dirlookup(dp, name, &off)) != 0){
     iunlockput(dp);
     ilock(ip);
-    if(ip->type != type || ip->major != major || ip->minor != minor){
+    if(ip->type != type || ip->major != major || ip->minor != minor)
+    {
       iunlockput(ip);
       return 0;
     }
@@ -270,7 +279,6 @@ create(char *path, int canexist, short type, short major, short minor)
   ip->minor = minor;
   ip->nlink = 1;
   iupdate(ip);
-  
   if(dirlink(dp, name, ip->inum) < 0){
     ip->nlink = 0;
     iunlockput(ip);
@@ -286,6 +294,8 @@ create(char *path, int canexist, short type, short major, short minor)
       panic("create dots");
   }
   iunlockput(dp);
+  end_trans();
+  jfull_flush();
   return ip;
 }
 
@@ -306,13 +316,10 @@ sys_open(void)
       return -1;
     }
   } else {
-    cprintf("Opening!\n");
     if((ip = namei(path)) == 0) {
-      cprintf("Zero!");
       end_trans();
       return -1;
     }
-    cprintf("iLock(ip)\n");
     ilock(ip);
     if(ip->type == T_DIR && (omode & (O_RDWR|O_WRONLY))){
       iunlockput(ip);
@@ -320,7 +327,6 @@ sys_open(void)
       return -1;
     }
   }
-    cprintf("\nFile alloc\n");
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
       fileclose(f);
@@ -336,7 +342,6 @@ sys_open(void)
   f->readable = !(omode & O_WRONLY);
   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
   end_trans();
-  cprintf("Open done!\n");
   return fd;
 }
 
@@ -358,7 +363,6 @@ sys_mknod(void)
   iput(ip);
 
   end_trans();
-  cprintf("mknode done!\n");
   return 0;
 }
 

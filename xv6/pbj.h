@@ -10,7 +10,6 @@ struct jsblock {
   uint head_block;   // Number of the block in whole FS with head of journal
   uint tail_block;   // Number of the block in whole FS with tail of journal
   uint time_stamp;
-  char replay_journal;
 };
 
 struct jtrans {
@@ -36,5 +35,6 @@ struct mem_trans_node {
 };
 
 void end_trans(void);
+extern int should_panic;
 
 #endif

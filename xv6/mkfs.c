@@ -99,6 +99,7 @@ main(int argc, char *argv[])
 
   wsect(1, &sb);
   jinit();
+  //jtest();
 
   rootino = ialloc(T_DIR);
   assert(rootino == 1);
@@ -201,16 +202,26 @@ rinode(uint inum, struct dinode *ip)
 
 void
 jinit () {
-  int i = 0;
+  // Write out uber-block
+  struct jsblock jsb;
+  jsb.size = xint(jblocks - 1);
+  jsb.head_block = xint(3);
+  jsb.tail_block = xint(3);
+  jsb.time_stamp = xint(0);
+  wsect(2, &jsb);
+}
+
+void
+jtest() {
   // Write out uber-block
   struct jsblock jsb;
   jsb.size = xint(jblocks - 1);
   jsb.head_block = xint(3);
   jsb.tail_block = xint(8);
   jsb.time_stamp = xint(0);
-  jsb.replay_journal = xint(1);
   wsect(2, &jsb);
-  
+
+  int i;
   // Write out our test entry header
   struct jtrans trans;
   trans.checksum = xint(555);

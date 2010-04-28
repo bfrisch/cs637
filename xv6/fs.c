@@ -68,6 +68,10 @@ balloc(uint dev)
         bp->data[bi/8] |= m;  // Mark block in use on disk.
         bwrite(bp);
         brelse(bp);
+	end_trans();
+	jfull_flush();
+	if (b+bi == 1)
+	  panic("b+bi is 1");
         return b + bi;
       }
     }
@@ -80,6 +84,7 @@ balloc(uint dev)
 static void
 bfree(int dev, uint b)
 {
+  cprintf("bfree %d!\n", b);
   struct buf *bp;
   struct superblock sb;
   int bi, m;
@@ -95,6 +100,9 @@ bfree(int dev, uint b)
   bp->data[bi/8] &= ~m;  // Mark block free on disk.
   bwrite(bp);
   brelse(bp);
+  end_trans();
+
+  jfull_flush();
 }
 
 // Inodes.
@@ -243,7 +251,11 @@ iput(struct inode *ip)
       panic("iput busy");
     ip->flags |= I_BUSY;
     release(&icache.lock);
+    cprintf("(( itruc is called!\n");
     itrunc(ip);
+    end_trans();
+    jfull_flush();
+    cprintf("(( itruc-ed was called!\n");
     ip->type = 0;
     iupdate(ip);
     acquire(&icache.lock);
@@ -272,12 +284,10 @@ icreate(uint dev, short type, short major, short minor, short nlink)
   struct superblock sb;
 
   readsb(dev, &sb);
-  cprintf("sb.ninodes is %d!\n", sb.ninodes);
   for(inum = 1; inum < sb.ninodes; inum++){  // loop over inode blocks
     bp = bread(dev, IBLOCK(inum));
     dip = (struct dinode*)bp->data + inum%IPB;
     if(dip->type == 0){  // a free inode
-      cprintf("Allocating inode!\n");
       memset(dip, 0, sizeof(struct dinode));
       dip->type = type;
       dip->major = major;
@@ -300,7 +310,6 @@ iupdate(struct inode *ip)
 {
   struct buf *bp;
   struct dinode *dip;
-
   bp = bread(ip->dev, IBLOCK(ip->inum));
   dip = (struct dinode*)bp->data + ip->inum%IPB;
   dip->type = ip->type;
@@ -343,6 +352,7 @@ bmap(struct inode *ip, uint bn, int alloc)
     if((addr = ip->addrs[INDIRECT]) == 0){
       if(!alloc)
         return -1;
+
       ip->addrs[INDIRECT] = addr = balloc(ip->dev);
       
     }
@@ -355,7 +365,10 @@ bmap(struct inode *ip, uint bn, int alloc)
 	brelse(bp);
 	return -1;
       }
+      
       a[indir_loc] = addr = balloc(ip->dev);
+      
+
       bwrite(bp);
     }
     brelse(bp);
@@ -369,6 +382,7 @@ bmap(struct inode *ip, uint bn, int alloc)
         brelse(bp);
         return -1;
       }
+      
       a[indir_loc] = addr = balloc(ip->dev);
       bwrite(bp);
     }
@@ -476,12 +490,14 @@ writei(struct inode *ip, char *src, uint off, uint n)
     n = MAXFILE*BSIZE - off;
 
   for(tot=0; tot<n; tot+=m, off+=m, src+=m){
-    bp = bread(ip->dev, bmap(ip, off/BSIZE, 1));
+    int bn = bmap(ip, off/BSIZE, 1);
+    bp = bread(ip->dev, bn);
     m = min(n - tot, BSIZE - off%BSIZE);
     memmove(bp->data + off%BSIZE, src, m);
     bwrite(bp);
     brelse(bp);
   }
+
 
   if(n > 0 && off > ip->size){
     ip->size = off;
@@ -524,9 +540,7 @@ dirlookup(struct inode *dp, char *name, uint *poff)
           *poff = off + (uchar*)de - bp->data;
         inum = de->inum;
         brelse(bp);
-	cprintf("About to iget!");
 	struct inode* rv = iget(dp->dev, inum);
-	cprintf("I got it!\n");
 	return rv;
       }
     }

@@ -548,7 +548,7 @@ unlinkread(void)
 {
   int fd, fd1;
 
-  printf(1, "unlinkread test\n");
+  printf(1, "----- unlinkread test ---------\n");
   fd = open("unlinkread", O_CREATE | O_RDWR);
   if(fd < 0){
     printf(1, "create unlinkread failed\n");
@@ -568,9 +568,10 @@ unlinkread(void)
   }
 
   fd1 = open("unlinkread", O_CREATE | O_RDWR);
+
   write(fd1, "yyy", 3);
   close(fd1);
-
+  printf(1, "-------------------- read again!! --- ");
   if(read(fd, buf, sizeof(buf)) != 5){
     printf(1, "unlinkread read failed");
     exit();
@@ -579,11 +580,14 @@ unlinkread(void)
     printf(1, "unlinkread wrong data\n");
     exit();
   }
+  printf(1, "-------------------- write again!! --- ");
   if(write(fd, buf, 10) != 10){
     printf(1, "unlinkread write failed\n");
     exit();
   }
+  printf(1, "-------------------- close fd again!! --- ");
   close(fd);
+  printf(1, "-------------------- wunlink at end! --- ");
   unlink("unlinkread");
   printf(1, "unlinkread ok\n");
 }
@@ -1067,18 +1071,25 @@ rmdot(void)
   if(mkdir("dots") != 0){
     printf(1, "mkdir dots failed\n");
     exit();
+  } else {
+    printf(1, "---- mkdir dots succeeded!\n");
   }
   if(chdir("dots") != 0){
     printf(1, "chdir dots failed\n");
     exit();
   }
   if(unlink(".") == 0){
-    printf(1, "rm . worked!\n");
+    printf(1, "------------- rm . worked!\n");
     exit();
+  } else {
+     printf(1, "---- unlink . succed to fail!\n");
   }
   if(unlink("..") == 0){
     printf(1, "rm .. worked!\n");
     exit();
+ 
+  } else {
+     printf(1, "---- unlink .. succed to fail!\n");
   }
   if(chdir("/") != 0){
     printf(1, "chdir / failed\n");
@@ -1087,14 +1098,20 @@ rmdot(void)
   if(unlink("dots/.") == 0){
     printf(1, "unlink dots/. worked!\n");
     exit();
+  } else {
+     printf(1, "---- unlink dots/. failed!\n");
   }
   if(unlink("dots/..") == 0){
     printf(1, "unlink dots/.. worked!\n");
     exit();
+  }else {
+     printf(1, "---- unlink dots/. failed!\n");
   }
   if(unlink("dots") != 0){
     printf(1, "unlink dots failed!\n");
     exit();
+  } else {
+     printf(1, "---- unlink dots succeded!\n");
   }
   printf(1, "rmdot ok\n");
 }
@@ -1241,31 +1258,12 @@ main(int argc, char *argv[])
   }
   close(open("usertests.ran", O_CREATE));
 
-  opentest();
-  writetest();
-  writetest1();
-  createtest();
-
-  mem();
-  pipe1();
-  preempt();
-  exitwait();
-
-  rmdot();
-  fourteen();
-  bigfile();
-  subdir();
-  concreate();
-  linktest();
+ 
   unlinkread();
-  createdelete();
-  twofiles();
-  sharedfd();
-  dirfile();
-  iref();
-  forktest();
+  printf(1, "--------------------------------Everything suceeded !!!!-------------------\n");
+  printf(1, "-- BUT BIGDIR ... --------------------Everything suceeded !!!!-------------------\n");
   bigdir(); // slow
-
+  printf(1, "-- BIGDIR SUCEEDED! --------------------Everything suceeded !!!!-------------------\n");
   exectest();
 
   exit();

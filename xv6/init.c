@@ -13,12 +13,6 @@ int
 main(void)
 {
   int pid, wpid;
-  if(open("console", O_RDWR) < 0){
-    mknod("console", 1, 1);
-    open("console", O_RDWR);
-  }
-  dup(0);  // stdout
-  dup(0);  // stderr
 
   printf(1, "init: running fsck\n");
   pid = fork();
@@ -30,8 +24,15 @@ main(void)
     exec("fsck", fsck_args);
     printf(1, "init: exec fsck failed\n");
     exit();
-    }
+  }
   wpid=wait();
+
+  if(open("console", O_RDWR) < 0){
+    mknod("console", 1, 1);
+    open("console", O_RDWR);
+  }
+  dup(0);  // stdout
+  dup(0);  // stderr
 
   printf(1, "init: starting pbjd\n");
   pid = fork();
@@ -45,10 +46,8 @@ main(void)
     exit();
     }
 
-    printf(1, "init: starting ls\n");
-
   for(;;){
-    printf(1, "init: starting ls\n");
+    printf(1, "init: starting sh\n");
     pid = fork();
     if(pid < 0){
       printf(1, "init: fork failed\n");

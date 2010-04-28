@@ -23,6 +23,7 @@ int mkdir(char*);
 int chdir(char*);
 int dup(int)
 # I don't need a semi-colon since gensyss.pl requires each system call prototype to be on its own line for now.
+void set_write_panic(int)
 int getpid();
 char* sbrk(int);
 int sleep(int);

@@ -136,6 +136,10 @@ void            release(struct spinlock*);
 void            pushcli();
 void            popcli();
 
+// schedspinlock.c
+void            acquire_sl(struct spinlock*);
+void            release_sl(struct spinlock*);
+
 // string.c
 int             memcmp(const void*, const void*, uint);
 void*           memmove(void*, const void*, uint);
